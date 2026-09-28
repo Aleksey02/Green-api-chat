@@ -1,0 +1,32 @@
+.logout-dialog-backdrop {
+  position: fixed;
+  z-index: 12;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(20 31 23 / 42%);
+}
+
+.logout-dialog {
+  width: min(100%, 360px);
+  padding: 22px;
+  border: 1px solid #e3e9e3;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 16px 48px rgb(21 39 26 / 20%);
+}
+
+.logout-dialog h2 {
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.logout-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 22px;
+}

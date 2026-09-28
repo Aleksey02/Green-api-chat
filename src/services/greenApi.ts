@@ -44,6 +44,14 @@ export function createGreenApi(config: GreenApiConfig) {
       return request('getStateInstance');
     },
 
+    configureMessageStatusNotifications() {
+      return request<{ saveSettings: boolean }>('setSettings', {
+        incomingWebhook: 'yes',
+        outgoingAPIMessageWebhook: 'yes',
+        outgoingWebhook: 'yes',
+      });
+    },
+
     sendMessage(chatId: string, message: string) {
       return request<{ idMessage: string }>(
         'sendMessage',
@@ -52,6 +60,33 @@ export function createGreenApi(config: GreenApiConfig) {
           message,
         }
       );
+    },
+
+    getChatHistory(chatId: string, count = 100) {
+      return request<Array<{
+        type: string;
+        idMessage: string;
+        statusMessage?: string;
+      }>>('getChatHistory', { chatId, count });
+    },
+
+    getContactInfo(chatId: string) {
+      return request<{
+        name?: string;
+        contactName?: string;
+        displayName?: string;
+        username?: string;
+        avatar?: string;
+        base64Avatar?: string;
+      }>('getContactInfo', { chatId });
+    },
+
+    getAvatar(chatId: string) {
+      return request<{
+        urlAvatar?: string;
+        available?: boolean;
+        base64Avatar?: string;
+      }>('getAvatar', { chatId });
     },
 
     receiveNotification() {
@@ -89,6 +124,8 @@ export function createGreenApi(config: GreenApiConfig) {
   return request<{
     exist: boolean;
     chatId: string;
+    name?: string;
+    displayName?: string;
     username?: string;
     phoneNumber?: number;
     fromCache?: boolean;
@@ -98,3 +135,5 @@ export function createGreenApi(config: GreenApiConfig) {
 },
   };
 }
+
+export type GreenApiClient = ReturnType<typeof createGreenApi>;

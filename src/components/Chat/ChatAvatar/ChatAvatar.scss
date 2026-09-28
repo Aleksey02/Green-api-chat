@@ -1,0 +1,48 @@
+.chat__avatar {
+  position: relative;
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  place-items: center;
+  border: 1px solid #dce8de;
+  border-radius: 50%;
+  color: var(--green-dark);
+  background: var(--green-soft);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.chat__avatar-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+.chat__avatar--small {
+  width: 34px;
+  height: 34px;
+  font-size: 12px;
+}
+
+.chat__contact-row .chat__avatar {
+  width: 48px;
+  height: 48px;
+  border: 0;
+  color: var(--green-contrast);
+  background: linear-gradient(145deg, var(--green-light), var(--green));
+  font-size: 16px;
+}
+
+.chat__header-contact .chat__avatar {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  color: var(--green-contrast);
+  background: linear-gradient(145deg, var(--green-light), var(--green));
+}

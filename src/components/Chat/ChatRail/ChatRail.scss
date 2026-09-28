@@ -1,0 +1,112 @@
+.chat__rail {
+  z-index: 2;
+  display: flex;
+  width: 60px;
+  min-width: 60px;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 6px;
+  border-right: 1px solid #e7e9eb;
+  background: #fff;
+}
+
+.chat__rail-logo {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  margin-bottom: 7px;
+  place-items: center;
+  border-radius: 9px;
+  color: var(--green-contrast);
+  background: var(--green);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.chat__rail-item,
+.chat__rail-settings {
+  display: grid;
+  width: 46px;
+  min-height: 48px;
+  align-content: center;
+  justify-items: center;
+  gap: 2px;
+  border: 0;
+  border-radius: 6px;
+  color: #777e84;
+  background: transparent;
+}
+
+.chat__rail-item span,
+.chat__rail-settings {
+  font-size: 19px;
+  line-height: 1;
+}
+
+.chat__rail-icon {
+  position: relative;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+}
+
+.chat__rail-icon svg {
+  display: block;
+  width: 23px;
+  height: 23px;
+  overflow: visible;
+  fill: currentColor;
+}
+
+.chat__rail-icon svg circle {
+  fill: #fff;
+}
+
+.chat__rail-unread {
+  position: absolute;
+  top: -4px;
+  right: -9px;
+  display: grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  padding: 0 4px;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  color: var(--green-contrast);
+  background: var(--green);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.chat__rail-item small {
+  font-size: 9px;
+  color: #81878c;
+}
+
+.chat__rail-item--active {
+  color: var(--green);
+  background: var(--green-soft);
+}
+
+.chat__rail-spacer {
+  flex: 1;
+}
+
+.chat__rail-label {
+  width: 48px;
+  color: #9ba49c;
+  font-size: 7px;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .chat__rail {
+    display: none;
+  }
+}

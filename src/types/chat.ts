@@ -3,20 +3,26 @@ export type Message = {
   text: string;
   sender: 'me' | 'other';
   timestamp: number;
+  status?: 'sent' | 'delivered' | 'read';
 };
 
 export type ChatInfo = {
   chatId: string;
   phone: string;
   name?: string;
+  avatar?: string;
 };
 
 export type Notification = {
   receiptId: number;
 
   body: {
-    typeWebhook: string;
+    typeWebhook?: string;
+    type?: string;
     idMessage?: string;
+    chatId?: string;
+    status?: string;
+    statusMessage?: string;
 
     senderData?: {
       chatId?: string;
@@ -36,6 +42,12 @@ export type Notification = {
         textMessage: string;
         forwardingScore?: number;
         isForwarded?: boolean;
+      };
+
+      extendedTextMessageData?: {
+        text: string;
+        description?: string;
+        title?: string;
       };
     };
   };

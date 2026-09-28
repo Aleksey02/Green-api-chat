@@ -1,32 +1,42 @@
-# React + TypeScript + Vite
+# MAX Chat
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+MAX Chat — веб-клиент для переписки через GREEN-API. В приложении можно подключить инстанс GREEN-API, открыть чат по номеру телефона, отправлять и получать сообщения, видеть статусы прочтения и настраивать цвет и фон переписки.
 
-Currently, two official plugins are available:
+Интерфейс создан на React и TypeScript, сборка и локальный сервер работают через Vite. Отдельный backend для локального запуска не требуется: браузер обращается к GREEN-API напрямую.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Требования
 
-## React Compiler
+- Node.js 20.19+ или 22.12+.
+- npm.
+- Активный инстанс GREEN-API и его `idInstance` и `apiTokenInstance`.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Локальный запуск
 
-## Expanding the Oxlint configuration
+1. Склонируйте репозиторий и перейдите в каталог проекта.
+2. Установите зависимости:
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+   ```bash
+   npm install
+   ```
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
+3. Запустите сервер разработки:
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+   ```bash
+   npm run dev
+   ```
+
+4. Откройте адрес, показанный Vite в терминале. Обычно это `http://localhost:5173/`.
+5. На странице подключения введите `idInstance` и `apiTokenInstance` из личного кабинета GREEN-API.
+
+Файл `.env` для запуска не нужен. Секреты вводятся в форме приложения и сохраняются в `localStorage` текущего браузера, чтобы восстановить подключение при следующем открытии.
+
+## Скрипты
+
+- `npm run dev` — запустить сервер разработки с горячей перезагрузкой.
+- `npm run build` — проверить TypeScript и собрать production-версию в `dist/`.
+- `npm run preview` — локально просмотреть production-сборку после `npm run build`.
+- `npm run lint` — проверить код с Oxlint.
+
+## Данные и подключение
+
+Для создания чата укажите номер телефона в международном формате. Приложение запрашивает контакт и историю сообщений через GREEN-API, а новые уведомления получает во время работы страницы. Список чатов, сообщения, авторизация и настройки оформления хранятся в `localStorage` этого браузера; очистка данных сайта удалит их. Не используйте общий или недоверенный браузер для сохранения токена.

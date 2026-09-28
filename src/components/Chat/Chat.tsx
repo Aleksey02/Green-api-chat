@@ -1,57 +1,118 @@
-import { useEffect, useState, useRef } from 'react';
+import { useState, useRef, type CSSProperties } from 'react';
+import './Chat.scss';
+import { ChatConversation } from './ChatConversation/ChatConversation';
+import { ChatRail } from './ChatRail/ChatRail';
+import { ChatSidebar } from './ChatSidebar/ChatSidebar';
+import { ChatSettingsDialog } from './ChatSettingsDialog/ChatSettingsDialog';
+import { LogoutConfirmDialog } from './LogoutConfirmDialog/LogoutConfirmDialog';
+import {
+	readStoredChatState,
+	upsertChat,
+} from '../../utils/chatState';
+import type { GreenApiClient } from '../../services/greenApi';
+import {
+	APP_THEMES,
+	CHAT_PATTERNS,
+	CHAT_PATTERN_STORAGE_KEY,
+	CUSTOM_THEME_COLOR_KEY,
+	THEME_STORAGE_KEY,
+	getThemeContrast,
+	getThemePalette,
+	isHexColor,
+	type AppThemeId,
+	type ChatPatternId,
+	type ThemeSelection,
+} from '../../utils/chatTheme';
 import type {
 	ChatInfo,
 	Message,
-	Notification,
 } from '../../types/chat';
+import { getChatInfo } from '../../utils/getChatInfo';
+import { useChatNotifications } from '../../hooks/useChatNotifications';
+import { useChatProfiles } from '../../hooks/useChatProfiles';
+import { useChatSettings } from '../../hooks/useChatSettings';
+import { useChatStorage } from '../../hooks/useChatStorage';
 
 type ChatProps = {
-	api: {
-		checkAccount: (phoneNumber: number) => Promise<{
-			exist: boolean;
-			chatId: string;
-			username?: string;
-			phoneNumber?: number;
-			fromCache?: boolean;
-		}>;
-
-		sendMessage: (
-			chatId: string,
-			message: string
-		) => Promise<{ idMessage: string }>;
-
-		receiveNotification: () => Promise<Notification | null>;
-
-		deleteNotification: (
-			receiptId: number
-		) => Promise<Response>;
-	};
-
+	api: GreenApiClient;
 	onLogout: () => void;
+	statusSetupNotice?: string;
 };
 
-export function Chat({ api, onLogout }: ChatProps) {
+export function Chat({ api, onLogout, statusSetupNotice }: ChatProps) {
+	const [storedChatState] = useState(readStoredChatState);
+	const [customThemeColor, setCustomThemeColor] = useState(() => {
+		const storedColor = localStorage.getItem(CUSTOM_THEME_COLOR_KEY);
+		return isHexColor(storedColor) ? storedColor : '#267354';
+	});
+	const [themeId, setThemeId] = useState<ThemeSelection>(() => {
+		const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+		if (storedTheme === 'custom' && isHexColor(localStorage.getItem(CUSTOM_THEME_COLOR_KEY))) {
+			return 'custom';
+		}
+
+		return APP_THEMES.some((theme) => theme.id === storedTheme)
+			? (storedTheme as AppThemeId)
+			: 'green';
+	});
+	const [chatPatternId, setChatPatternId] = useState<ChatPatternId>(() => {
+		const storedPattern = localStorage.getItem(CHAT_PATTERN_STORAGE_KEY);
+		return CHAT_PATTERNS.some((pattern) => pattern.id === storedPattern)
+			? (storedPattern as ChatPatternId)
+			: 'circles';
+	});
+	const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 	const [phone, setPhone] = useState('');
-	const [activeChat, setActiveChat] = useState<ChatInfo | null>(null);
-	const activeChatRef = useRef<ChatInfo | null>(null);
+	const [chats, setChats] = useState<ChatInfo[]>(storedChatState.chats);
+	const chatsRef = useRef<ChatInfo[]>(storedChatState.chats);
+	const [activeChat, setActiveChat] = useState<ChatInfo | null>(() =>
+		storedChatState.chats.find(
+			(chat) => chat.chatId === storedChatState.activeChatId
+		) ?? null
+	);
+	const activeChatIdRef = useRef(
+		storedChatState.chats.find(
+			(chat) => chat.chatId === storedChatState.activeChatId
+		)?.chatId ?? null
+	);
 	const [message, setMessage] = useState('');
-	const [messages, setMessages] = useState<Message[]>([]);
-	const messagesEndRef = useRef<HTMLDivElement | null>(null);
+	const messageInputRef = useRef<HTMLInputElement | null>(null);
+	const [messagesByChat, setMessagesByChat] = useState<Record<string, Message[]>>(
+		storedChatState.messagesByChat
+	);
+	const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>(
+		storedChatState.unreadCounts ?? {}
+	);
+	const totalUnreadCount = Object.values(unreadCounts).reduce(
+		(total, count) => total + count,
+		0
+	);
+	const messages = activeChat ? messagesByChat[activeChat.chatId] ?? [] : [];
 	const processedMessages = useRef(new Set<string>());
+	const readMessageIds = useRef(new Set<string>());
 	const [isCreatingChat, setIsCreatingChat] = useState(false);
 	const [error, setError] = useState('');
 	const [isSending, setIsSending] = useState(false);
 	const [sendError, setSendError] = useState('');
+	const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
+	const activeTheme = getThemePalette(themeId, customThemeColor);
+	const themeStyles = {
+		'--green': activeTheme.primary,
+		'--green-dark': activeTheme.dark,
+		'--green-soft': activeTheme.soft,
+		'--green-light': activeTheme.light,
+		'--green-rgb': activeTheme.rgb,
+		'--green-contrast': getThemeContrast(activeTheme.primary),
+		'--chat-background': activeTheme.background,
+	} as CSSProperties;
 
-async function createChat(event: React.FormEvent<HTMLFormElement>) {
-	event.preventDefault();
+	useChatSettings(themeId, customThemeColor, chatPatternId);
+
+async function createChat(e: React.FormEvent<HTMLFormElement>) {
+	e.preventDefault();
 
 	const value = phone.trim();
-
-	if (!value) {
-		setError('Введите номер телефона');
-		return;
-	}
+	if (!value) return setError('Введите номер телефона');
 
 	setIsCreatingChat(true);
 	setError('');
@@ -60,28 +121,34 @@ async function createChat(event: React.FormEvent<HTMLFormElement>) {
 		const result = await api.checkAccount(Number(value));
 
 		if (!result.exist || !result.chatId) {
-			setError('Telegram аккаунт с таким номером не найден');
-			return;
+			return setError('Telegram аккаунт с таким номером не найден');
 		}
 
-		const chat: ChatInfo = {
-			chatId: result.chatId,
-			phone: value,
-			name: result.username,
-		};
+		const chat = await getChatInfo(api, result.chatId, value, {
+			name: result.name,
+			displayName: result.displayName,
+			username: result.username,
+		});
+		console.log(chat);
+		
+		const { chat: selected, chats: updated } =
+			upsertChat(chatsRef.current, chat);
 
-		setActiveChat(chat);
-		activeChatRef.current = chat;
+		chatsRef.current = updated;
+		setChats(updated);
+		setActiveChat(selected);
+		setUnreadCounts(prev => ({ ...prev, [selected.chatId]: 0 }));
 
-		setMessages([]);
-	} catch (error) {
-		console.error('Ошибка создания чата:', error);
-
+		setPhone('');
+		setMessage('');
+		setSendError('');
+	} catch {
 		setError('Не удалось создать чат. Попробуйте ещё раз.');
 	} finally {
 		setIsCreatingChat(false);
 	}
 }
+
 
 async function sendMessage(event: React.FormEvent<HTMLFormElement>) {
 	event.preventDefault();
@@ -94,6 +161,7 @@ async function sendMessage(event: React.FormEvent<HTMLFormElement>) {
 
 	setIsSending(true);
 	setSendError('');
+	let messageSent = false;
 
 	try {
 		const result = await api.sendMessage(
@@ -106,14 +174,19 @@ async function sendMessage(event: React.FormEvent<HTMLFormElement>) {
 			text,
 			sender: 'me',
 			timestamp: Date.now(),
+			status: readMessageIds.current.has(result.idMessage) ? 'read' : 'sent',
 		};
 
-		setMessages((prev) => [
-			...prev,
-			newMessage,
-		]);
+		setMessagesByChat((previous) => ({
+			...previous,
+			[activeChat.chatId]: [
+				...(previous[activeChat.chatId] ?? []),
+				newMessage,
+			],
+		}));
 
 		setMessage('');
+		messageSent = true;
 	} catch (error) {
 		console.error(
 			'Ошибка отправки сообщения:',
@@ -123,224 +196,106 @@ async function sendMessage(event: React.FormEvent<HTMLFormElement>) {
 		setSendError('Не удалось отправить сообщение. Попробуйте ещё раз.');
 	} finally {
 		setIsSending(false);
+		if (messageSent) {
+			window.requestAnimationFrame(() => messageInputRef.current?.focus());
+		}
 	}
 }
 
-	useEffect(() => {
-		let isRunning = true;
+	useChatNotifications({
+		api,
+		chats,
+		chatsRef,
+		activeChatIdRef,
+		readMessageIds,
+		processedMessages,
+		setChats,
+		setActiveChat,
+		setMessagesByChat,
+		setUnreadCounts,
+	});
 
-		async function receiveMessages() {
-			while (isRunning) {
-				try {
-					const notification = await api.receiveNotification();
+	useChatProfiles({ api, chats, chatsRef, setChats, setActiveChat });
 
-					if (!notification) {
-						continue;
-					}
-
-					console.log(
-						'NOTIFICATION:',
-						JSON.stringify(
-							notification,
-							null,
-							2
-						)
-					);
-
-					const body = notification.body;
-
-					if (
-						activeChatRef.current &&
-						body.typeWebhook === 'incomingMessageReceived' &&
-						body.senderData?.chatType === 'user' &&
-						body.senderData?.chatId ===
-						activeChatRef.current.chatId &&
-						body.messageData?.typeMessage === 'textMessage'
-					) {
-						const text = body.messageData.textMessageData?.textMessage;
-
-						if (text) {
-						const messageId =
-						body.idMessage ?? crypto.randomUUID();
-
-						if (processedMessages.current.has(messageId)) {
-						await api.deleteNotification(
-							notification.receiptId
-						);
-
-					continue;
-					}
-
-					processedMessages.current.add(messageId);
-
-		const newMessage: Message = {
-		id: messageId,
-		text,
-		sender: 'other',
-		timestamp: Date.now(),
-		};
-
-		setMessages((prev) => [
-		...prev,
-		newMessage,
-		]);
-		}
-		}
-
-				await api.deleteNotification(
-				notification.receiptId
-				);
-			} catch (error) {
-				console.error(
-				'Ошибка получения сообщения:',
-				error
-				);
-
-				await new Promise((resolve) =>
-				setTimeout(resolve, 3000)
-				);
-			}
-			}
-		}
-
-		receiveMessages();
-
-		return () => {
-			isRunning = false;
-		};
-	}, [api]);
-
-	useEffect(() => {
-	messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-	}, [messages]);
+	useChatStorage({
+		chats,
+		messagesByChat,
+		unreadCounts,
+		activeChatId: activeChat?.chatId ?? null,
+	});
 
   return (
-    <div className="chat">
-      <header className="chat__header">
-        <div className="chat__brand">
-          <span className="chat__brand-mark" aria-hidden="true">M</span>
-          <span>Линия</span>
-        </div>
-        <div className="chat__header-contact">
-          <span className="chat__avatar" aria-hidden="true">
-            {(activeChat?.name || activeChat?.phone || 'Ч').slice(0, 1).toUpperCase()}
-          </span>
-          <div className="chat__header-copy">
-            <strong>{activeChat?.name || activeChat?.phone || 'Ваши сообщения'}</strong>
-            <span>{activeChat?.phone || 'GREEN-API · личные чаты'}</span>
-          </div>
-        </div>
+	<div className="chat" data-chat-pattern={chatPatternId} style={themeStyles}>
+			<ChatRail
+				totalUnreadCount={totalUnreadCount}
+				isSettingsOpen={isSettingsOpen}
+				onOpenSettings={() => setIsSettingsOpen(true)}
+			/>
 
-        <button className="button button--quiet chat__logout" onClick={onLogout}>
-          Выйти
-        </button>
-      </header>
-
-      <div className="chat__layout">
-        <aside className="chat__sidebar">
-          <div className="chat__section-heading">
-            <div>
-              <p className="chat__eyebrow">ПРОСТРАНСТВО</p>
-              <h2>Новый диалог</h2>
-            </div>
-            <span className="chat__section-icon" aria-hidden="true">＋</span>
-          </div>
-          <p className="chat__sidebar-copy">Введите номер телефона, чтобы начать переписку.</p>
-
-          <form onSubmit={createChat} className="chat__create">
-            <label className="field">
-              <span className="field__label">Номер телефона</span>
-              <input
-                inputMode="tel"
-                type="tel"
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                placeholder="79991234567"
-              />
-            </label>
-            <button className="button button--primary" type="submit" disabled={isCreatingChat}>
-              {isCreatingChat ? 'Создание...' : 'Создать чат'}
-            </button>
-          </form>
-
-          {error && <div className="chat__error" role="alert">{error}</div>}
-
-          <div className="chat__sidebar-divider" />
-          <p className="chat__eyebrow">АКТИВНЫЙ ДИАЛОГ</p>
-          {activeChat ? (
-            <div className="chat__current">
-              <span className="chat__avatar chat__avatar--small" aria-hidden="true">
-                {(activeChat.name || activeChat.phone).slice(0, 1).toUpperCase()}
-              </span>
-              <span className="chat__current-copy">
-                <strong>{activeChat.name || activeChat.phone}</strong>
-                <span>{activeChat.phone}</span>
-              </span>
-              <span className="chat__online-dot" aria-label="Активный чат" />
-            </div>
-          ) : (
-            <p className="chat__sidebar-empty">Пока нет активного диалога</p>
-          )}
-          <div className="chat__sidebar-bottom">Сообщения передаются через GREEN-API</div>
-        </aside>
-
-        <section className="chat__conversation" aria-label="Переписка">
-          <main className="chat__messages" aria-live="polite">
-            {activeChat ? (
-              messages.length > 0 ? (
-                messages.map((message) => (
-                  <div key={message.id} className={`message-row message-row--${message.sender}`}>
-                    <div className={`message message--${message.sender}`}>
-                      <p>{message.text}</p>
-                      <time>
-                        {new Date(message.timestamp).toLocaleTimeString('ru-RU', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </time>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="chat__empty-state">
-                  <span className="chat__empty-icon" aria-hidden="true">✳</span>
-                  <h2>Переписка начинается здесь</h2>
-                  <p>Напишите первое сообщение, чтобы начать разговор.</p>
-                </div>
-              )
-            ) : (
-              <div className="chat__empty-state">
-                <span className="chat__empty-icon" aria-hidden="true">↗</span>
-                <h2>Создайте чат, чтобы начать переписку</h2>
-                <p>Новый диалог появится здесь.</p>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </main>
-
-          <div className="chat__composer-wrap">
-            {sendError && <div className="chat__error chat__error--send" role="alert">{sendError}</div>}
-            <form onSubmit={sendMessage} className="chat__input">
-              <input
-                value={message}
-                onChange={(event) => setMessage(event.target.value)}
-                placeholder={activeChat ? 'Написать сообщение...' : 'Сначала создайте чат'}
-                disabled={!activeChat || isSending}
-                aria-label="Текст сообщения"
-              />
-              <button
-                className="button button--primary chat__send"
-                type="submit"
-                disabled={!activeChat || !message.trim() || isSending}
-                aria-label={isSending ? 'Отправка сообщения' : 'Отправить сообщение'}
-              >
-                <span>{isSending ? 'Отправка...' : 'Отправить'}</span>
-                {!isSending && <span aria-hidden="true">↑</span>}
-              </button>
-            </form>
-          </div>
-        </section>
-      </div>
+			<div className={`chat__workspace${activeChat ? ' chat__workspace--conversation' : ''}`}>
+				<ChatSidebar
+					chats={chats}
+					messagesByChat={messagesByChat}
+					unreadCounts={unreadCounts}
+					activeChatId={activeChat?.chatId ?? null}
+					phone={phone}
+					isCreatingChat={isCreatingChat}
+					error={error}
+					statusSetupNotice={statusSetupNotice}
+					onCreateChat={createChat}
+					onPhoneChange={setPhone}
+					onSelectChat={(chat) => {
+						activeChatIdRef.current = chat.chatId;
+						setActiveChat(chat);
+						setUnreadCounts((previous) => ({ ...previous, [chat.chatId]: 0 }));
+						setMessage('');
+						setSendError('');
+					}}
+					onOpenSettings={() => setIsSettingsOpen(true)}
+				/>
+				<ChatConversation
+					hasChats={chats.length > 0}
+					activeChat={activeChat}
+					messages={messages}
+					message={message}
+					sendError={sendError}
+					isSending={isSending}
+					messageInputRef={messageInputRef}
+					onMessageChange={setMessage}
+					onSubmit={sendMessage}
+					onBackToChats={() => {
+						activeChatIdRef.current = null;
+						setActiveChat(null);
+						setMessage('');
+						setSendError('');
+					}}
+					onOpenSettings={() => setIsSettingsOpen(true)}
+				/>
+			</div>
+			{isSettingsOpen && (
+				<ChatSettingsDialog
+					themeId={themeId}
+					customThemeColor={customThemeColor}
+					chatPatternId={chatPatternId}
+					onThemeChange={setThemeId}
+					onCustomColorChange={(color) => {
+						setCustomThemeColor(color);
+						setThemeId('custom');
+					}}
+					onPatternChange={setChatPatternId}
+					onClose={() => setIsSettingsOpen(false)}
+					onLogout={() => {
+						setIsSettingsOpen(false);
+						setIsLogoutDialogOpen(true);
+					}}
+				/>
+			)}
+			{isLogoutDialogOpen && (
+				<LogoutConfirmDialog
+					onCancel={() => setIsLogoutDialogOpen(false)}
+					onConfirm={onLogout}
+				/>
+			)}
     </div>
   );
 }

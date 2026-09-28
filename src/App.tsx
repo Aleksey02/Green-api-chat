@@ -1,26 +1,27 @@
 import { useState } from 'react';
 import { AuthForm } from './components/AuthForm/AuthForm';
 import { Chat } from './components/Chat/Chat';
-import { createGreenApi } from './services/greenApi';
+import { useStatusSetupNotice } from './hooks/useStatusSetupNotice';
+import {
+  createApiSession,
+  clearApiSession,
+  getSavedInstanceId,
+  restoreApiSession,
+} from './utils/appSession';
 
 function App() {
-  const [api, setApi] = useState<ReturnType<
-    typeof createGreenApi
-  > | null>(null);
+  const [api, setApi] = useState(restoreApiSession);
+  const [statusSetupNotice, setStatusSetupNotice] = useState('');
+  const idInstance = getSavedInstanceId();
+  useStatusSetupNotice(api, idInstance, setStatusSetupNotice);
 
-  function handleAuth(
-    idInstance: string,
-    apiTokenInstance: string
-  ) {
-    const greenApi = createGreenApi({
-      idInstance,
-      apiTokenInstance,
-    });
-
-    setApi(greenApi);
+  const handleAuth = (idInstance: string, apiTokenInstance: string) => {
+    setApi(createApiSession(idInstance, apiTokenInstance));
   }
 
-  function handleLogout() {
+  const handleLogout = () => {
+    clearApiSession();
+    setStatusSetupNotice('');
     setApi(null);
   }
 
@@ -32,6 +33,7 @@ function App() {
     <Chat
       api={api}
       onLogout={handleLogout}
+      statusSetupNotice={statusSetupNotice}
     />
   );
 }
